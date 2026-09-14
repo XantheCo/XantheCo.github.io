@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -91,11 +92,17 @@
       .footer .icon { width: 12px; height: 12px; }
 
       .loading-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: #2420325c; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); outline: none; touch-action: none; }
+      .loading-content { display: grid; justify-items: center; gap: 12px; max-width: 100%; }
       .loading-card { display: grid; place-items: center; width: 92px; height: 92px; border: 1px solid #ffffffad; border-radius: 24px; background: #fff; box-shadow: 0 16px 64px #231c4224; }
       .spinner { width: 31px; height: 31px; border: 3px solid #eee9fb; border-top-color: var(--purple); border-radius: 50%; animation: spin .85s linear infinite; }
       .loading-overlay.initial-loading { background: #24203214; -webkit-backdrop-filter: none; backdrop-filter: none; }
       .loading-overlay.initial-loading .loading-card { width: 56px; height: 56px; border-radius: 16px; background: #fffffff0; box-shadow: 0 6px 24px #231c4214; }
       .loading-overlay.initial-loading .spinner { width: 22px; height: 22px; border-width: 2px; }
+      .loading-progress { width: min(220px, calc(100vw - 48px)); padding: 12px 14px; border: 1px solid #ffffffad; border-radius: 14px; background: #fffffff0; box-shadow: 0 6px 24px #231c4214; }
+      .loading-progress-bar { display: block; width: 100%; height: 5px; border: 0; border-radius: 99px; overflow: hidden; -webkit-appearance: none; appearance: none; background: #eee9fb; color: var(--purple); }
+      .loading-progress-bar::-webkit-progress-bar { border-radius: 99px; background: #eee9fb; }
+      .loading-progress-bar::-webkit-progress-value { border-radius: 99px; background: var(--purple); }
+      .loading-progress-bar::-moz-progress-bar { border-radius: 99px; background: var(--purple); }
       body.is-loading { overflow: hidden; }
       @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -202,7 +209,12 @@
     </main>
 
     <div class="loading-overlay" id="loading-overlay" role="dialog" aria-modal="true" aria-label="Loading" tabindex="-1" hidden>
-      <div class="loading-card" aria-hidden="true"><div class="spinner"></div></div>
+      <div class="loading-content">
+        <div class="loading-card" aria-hidden="true"><div class="spinner"></div></div>
+        <div class="loading-progress" id="loading-progress" hidden>
+          <progress class="loading-progress-bar" id="loading-progress-bar" max="100" value="0" aria-label="Waiting progress"></progress>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -231,7 +243,8 @@
             placeholder: "请输出推文链接",
             submit: "获取完整视频",
             footer: "从一条链接开始",
-            loading: "正在加载"
+            loading: "正在加载",
+            loadingProgress: "等待进度"
           },
           en: {
             pageTitle: "Cliply · Post videos",
@@ -254,7 +267,8 @@
             placeholder: "Please enter a post link",
             submit: "Get Full Video",
             footer: "It starts with a link",
-            loading: "Loading"
+            loading: "Loading",
+            loadingProgress: "Waiting progress"
           }
         };
 
@@ -264,6 +278,8 @@
         const submitButton = document.getElementById("submit-button");
         const languageIndicator = document.getElementById("language-indicator");
         const overlay = document.getElementById("loading-overlay");
+        const loadingProgress = document.getElementById("loading-progress");
+        const loadingProgressBar = document.getElementById("loading-progress-bar");
         const userAgent = navigator.userAgent || "";
         const isAndroid = /Android/i.test(userAgent);
         const isChrome = /(?:Chrome|CriOS)\//i.test(userAgent)
@@ -298,6 +314,7 @@
           });
           input.placeholder = copy.placeholder;
           overlay.setAttribute("aria-label", copy.loading);
+          loadingProgressBar.setAttribute("aria-label", copy.loadingProgress);
           document.getElementById("language-label").textContent = language === "zh" ? "中文" : "EN";
           languageIndicator.lang = document.documentElement.lang;
           languageIndicator.setAttribute("aria-label", language === "zh" ? "当前语言：中文" : "Current language: English");
@@ -306,6 +323,25 @@
         function showLoading(duration, focusTarget = null, isInitialLoading = false) {
           if (loadingTimer !== null) return;
 
+          let progressFrame = null;
+          const startedAt = performance.now();
+
+          function renderProgress(elapsed) {
+            const elapsedTime = Math.min(duration, Math.max(0, elapsed));
+            loadingProgressBar.value = (elapsedTime / duration) * 100;
+          }
+
+          function animateProgress(now) {
+            const elapsed = now - startedAt;
+            renderProgress(elapsed);
+            if (elapsed < duration) progressFrame = window.requestAnimationFrame(animateProgress);
+          }
+
+          loadingProgress.hidden = !isInitialLoading;
+          if (isInitialLoading) {
+            renderProgress(0);
+            progressFrame = window.requestAnimationFrame(animateProgress);
+          }
           overlay.classList.toggle("initial-loading", isInitialLoading);
           input.blur();
           submitButton.disabled = true;
@@ -316,6 +352,9 @@
           overlay.focus({ preventScroll: true });
 
           loadingTimer = window.setTimeout(() => {
+            if (progressFrame !== null) window.cancelAnimationFrame(progressFrame);
+            if (isInitialLoading) renderProgress(duration);
+            loadingProgress.hidden = true;
             overlay.hidden = true;
             overlay.classList.remove("initial-loading");
             page.inert = false;
