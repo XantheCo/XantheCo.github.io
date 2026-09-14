@@ -349,18 +349,9 @@
           if (event.key === "Tab") event.preventDefault();
         });
 
-        // Android and Chrome skip only the initial loading overlay.
+        // Show the page-entry overlay on every load, except on Android and Chrome.
         if (!isAndroid && !isChrome) {
-          // Show it once per tab session, including across reloads.
-          const initialLoadingKey = "cliply.initialLoadingShown";
-          let isFirstVisit = true;
-          try {
-            isFirstVisit = sessionStorage.getItem(initialLoadingKey) !== "1";
-            if (isFirstVisit) sessionStorage.setItem(initialLoadingKey, "1");
-          } catch {
-            // Storage may be unavailable; the page can still finish loading.
-          }
-          if (isFirstVisit) showLoading(20_000, null, true);
+          showLoading(20_000, null, true);
         }
       })();
     </script>
