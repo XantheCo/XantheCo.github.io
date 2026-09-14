@@ -265,6 +265,17 @@
         const browserLanguage = navigator.languages?.[0] || navigator.language || "en";
         let language = /^zh(?:[-_]|$)/i.test(browserLanguage) ? "zh" : "en";
         let loadingTimer = null;
+		function reloadOnLeave() {
+          // Blur and visibilitychange can both fire during the same switch.
+          if (isReloading) return;
+          isReloading = true;
+          window.location.reload();
+        }
+
+        window.addEventListener("blur", reloadOnLeave);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") reloadOnLeave();
+        });
 
         function setLanguage(nextLanguage) {
           language = nextLanguage;
